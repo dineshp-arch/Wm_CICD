@@ -11,7 +11,7 @@
 	<!-- For wm10.x and above 
     <taskdef classpath = "${sag.install.dir}/common/lib/ant/ant-contrib-1.0b3.jar" resource="net/sf/antcontrib/antlib.xml"/> -->
 
-    <taskdef classpath = "${sag.install.dir}/common/lib/ext/ant-contrib-1.0b3.jar" resource="net/sf/antcontrib/antlib.xml"/>
+	<taskdef classpath = "${sag.install.dir}/common/lib/ant/ant-contrib-1.0b3.jar" resource="net/sf/antcontrib/antlib.xml"/>
 	
    	<target name="createRepositoryProject">
     

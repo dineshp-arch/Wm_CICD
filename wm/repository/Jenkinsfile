@@ -34,7 +34,7 @@ pipeline {
 		    description: 'Mode',
 		    name: 'MODE')
         string(
-        	defaultValue: "xxx", 
+        	defaultValue: "x.x.x", 
         	description: 'Build version', 
         	name: 'BUILD_VERSION')
         choice(
@@ -67,8 +67,8 @@ pipeline {
 		    name: 'ENABLE_UM_BUILD')
 	    choice(
 		    choices: 'false\ntrue',
-		    description: 'Import CentrSite archive',
-		    name: 'ENABLE_CS_IMPORT')
+		    description: 'Enable AGW Build',
+		    name: 'ENABLE_AGW_BUILD')
 	}
 
 
@@ -78,6 +78,11 @@ pipeline {
 	    stage ('Prepare worspace') {
 	        steps {
 	            script {
+					
+					//Update build display
+			    	currentBuild.displayName = "${MODULE}_${BUILD_VERSION}.${BUILD_ID}"
+                	currentBuild.description = "${MODULE} ${BUILD_VERSION}.${BUILD_ID} deployment on ${ENVIRONMENT} from branch ${BRANCH}"
+                	
 	            	//Read properties from file
 	            	props = readProperties file: "${dirUtils}/properties/build_"+"${params.ENVIRONMENT}".toLowerCase()+".properties"
 	            	dirWorkspace = props['dir.workspace'] +"/${params.ENVIRONMENT}/"+ props['dir.'+"${params.MODULE}".toLowerCase()]
@@ -122,8 +127,8 @@ pipeline {
 			}
 			steps {
 						
-					buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}")
-					uploadArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}")
+					buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}","${params.ENABLE_AGW_BUILD}")
+					uploadArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}")
 				
 				}
 			}
@@ -177,12 +182,13 @@ pipeline {
 					}
 			    }
 
-				stage ('CS') {
+				stage ('AGW') {
 					when {
-						expression { "${params.ENABLE_CS_IMPORT}" == 'true' }
+						expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
 					}
 					steps {
-						importCentraSiteArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}")
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
 					}
 			    }
 
@@ -195,13 +201,19 @@ pipeline {
 }
 
 
-def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild) {
+def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild, enableAgwBuild) {
     
     dirSagInstall=props['dir.install.build']
     dirAssetIS=props['dir.asset.is']
     dirAssetBPM=props['dir.asset.bpm']
     dirAssetMWS=props['dir.asset.mws']
     dirAssetUM=props['dir.asset.um']
+    dirAssetAGW=props['dir.asset.agw']
+    
+    sourceUrlAGW=props['source.url.agw']
+    sourceUserAGW=props['source.user.agw']
+    sourcePwdAGW=props['source.pwd.agw']
+    sourceAssetFileAGW="${dirWorkspace}/source/${dirAssetAGW}/"+props['source.assets.file.agw']
 
 	sh "rm -rf ${dirWorkspace}/builds/*"
 	
@@ -216,6 +228,12 @@ def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild
          -Denable.build.BPM=${enableBpmBuild}\
          -Denable.build.MWS=${enableMwsBuild}\
          -Denable.build.UniversalMessaging=${enableUmBuild}\
+		 -Denable.build.APIGateway=$enableAgwBuild\
+		 -Dapigateway.is.url=$sourceUrlAGW\
+		 -Dapigateway.is.username=$sourceUserAGW\
+		 -Dapigateway.is.password=$sourcePwdAGW\
+		 -Dapigateway.assets.file=$sourceAssetFileAGW\
+		 -Dapigateway.useLocalRepo=false\
          -Denable.archive=true"
 }
 
@@ -289,6 +307,20 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depSetName=props['dep.set.um']
 				depMapName=props['dep.map.um']
 				depCanName=props['dep.can.um']
+		case "AGW":
+				xmlTemplate="${dirTemplates}/"+props['template.base.agw']
+				xsltTemplate="${dirTemplates}/"+props['templete.xslt.agw']
+				targetAlias=props['target.alias.agw']
+				targetHost=props['target.host.agw']
+				targetPort=props['target.port.agw']
+				targetUser=props['target.user.agw']
+				targetPwd=props['target.pwd.agw']
+				targetVersion=props['target.version.agw']							
+				targetSsl=props['target.ssl.agw']							
+				depSetName=props['dep.set.agw']
+				depMapName=props['dep.map.agw']
+				depCanName=props['dep.can.agw']
+
 			break
 		default:
 			error("Unsupported project type : ${type}")    
@@ -297,7 +329,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 	    //For wM9.x versions ant is located in ${dirSagInstall}/common/AssetBuildEnvironment/ant/bin/ant
 	    //For wM10.x versions ant is located in ${dirSagInstall}/common/lib/ant/bin/ant
 	    
-		sh "${dirSagInstall}/common/AssetBuildEnvironment/ant/bin/ant -file $dirTemplates/build-custom.xml createRepositoryProject \
+		sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml createRepositoryProject \
         -Dsag.install.dir=${dirSagInstall}\
 		-Dautomator.file=${automatorFile} \
 		-Dautomator.template=${xmlTemplate} \
@@ -347,6 +379,9 @@ def deployProject(props, module, type, buildVersion) {
 		case "UM":
 				depCanName=props['dep.can.um']		
 			break
+		case "AGW":
+				depCanName=props['dep.can.agw']		
+			break
 		default:
 			error("Unsupported project type : ${type}")    
 			break
@@ -374,34 +409,4 @@ def uploadArchive(props,dirWorkspace,buildVersion) {
 	}       
 }
 
-
-def importCentraSiteArchive(props,dirWorkspace,buildVersion) {
-    	def archives
-    	dirSagInstall = props['dir.install.cs']
-    	dirAssetCS = props['dir.asset.cs']
-    	centrasiteUrl = props['centrasite.url']
-    	centrasiteUser = props['centrasite.user']
-    	centrasitePwd = props['centrasite.pwd']
-		repoArtifactCredential = props['repo.artifact.credential']
-    	repoArtifactUrl = props['repo.artifact.url']
-	    repoArtifactPath = props['repo.artifact.path.cs']
-    	
-    	//Download and unzip archives from artifact repository
-    	dir("${dirWorkspace}/source/${dirAssetCS}") {
-    	
-			withCredentials([usernamePassword(credentialsId: "${repoArtifactCredential}", usernameVariable: "artifactUser", passwordVariable: "artifactPwd")]) {
-    	    	sh "curl -X GET -sSL -u ${artifactUser}:${artifactPwd} ${repoArtifactUrl}/${repoArtifactPath}/${buildVersion}.zip -O"
-			}
-    	    sh "unzip -o ${buildVersion}.zip && rm -f ${buildVersion}.zip"
-    	    archives = findFiles(glob: "**/*.zip").toList()
-    	}
-    	
-    	//Import archives in CentraSite
-    	archives.each { item ->
-    	    sh "${dirSagInstall}/CentraSite/utilities/ImportArchive.sh -keeporganization -setreplace ${centrasiteUrl} ${dirWorkspace}/${dirAssetCS}/${item} ${centrasiteUser} ${centrasitePwd}"
-   		}
-    	
-
-        
-    }
 

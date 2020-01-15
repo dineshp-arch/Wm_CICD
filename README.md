@@ -27,7 +27,7 @@ ws-cleanup
 antisamy-markup-formatter
 ```
 
-* webMethods installation : 9.x ( 9.7 and above)
+* webMethods installation : 10.x ( 10.1 and above)
 
    * Integration Server : with Asset Build Environment and WmDeployer installed, this instance is used for build and deploy purpose
 
@@ -39,7 +39,7 @@ The following assets can be deployed with this framework :
 * IS : Integration server packages and configurations files (as supported by Asset Build environment)
 * UM : Universal Messaging assets
 * MWS : My webMethods server assets (Portlet, War...)
-* CS : CentraSite archives
+* AGW : API Gateway assets
 
 ## Configuration
 
@@ -117,12 +117,16 @@ dir.asset.bpm=bpm
 dir.asset.um=um/UniversalMessaging
 ## MWS (CAF)
 dir.asset.mws=mws
+## AGW (json extraction file)
+dir.asset.agw=api
 ```
 
 Which corresponds to an assets repository having the following structure
 
 ```
 ROOT_FOLDER/
+           api
+             /api.json
            esb
              /config
              /package1
@@ -180,16 +184,23 @@ Where COMPONENT can have the following values :
 * bpm : Process Engine target
 * um : Universal Messaging target
 * mws : My webMethods server target
+* agw : API Gateway server target
+
+For API Gateway only, update the following properties in order to extract assets from a source API Gateway : 
+
+* source.url.agw : source API Gateway URL
+* source.user.agw : source API Gateway user
+* source.pwd.agw: source API Gateway password
+* source.assets.file.agw : json extraction file (refer to API Gateway documentation) 
 
 #### Artifact repository configuration (Nexus)
 
-Update properties used for Nexus upload and download : 
+Update properties used for Nexus upload : 
 
 ```
 repo.artifact.credential=<NEXUS_CREDENTIAL>
 repo.artifact.url=<NEXUS_URL>
 repo.artifact.path.abe=<NEXUS_FOLDER_ABE>
-repo.artifact.path.cs=<NEXUS_FOLDER_CS>
 ```
 
 Where :
@@ -197,7 +208,6 @@ Where :
 * NEXUS_CREDENTIAL : Credential id used to connect to Nexus repository (basic authentification)
 * NEXUS_URL : URL of the repository
 * NEXUS_FOLDER_ABE : Folder where ACDL build output will be stored
-* NEXUS_FOLDER_CS : Folder where CentraSite archives should be stored
 
 ![Nexus folders](/resources/img/nexus_folders.png)
 
@@ -233,7 +243,7 @@ Run created job by providing inputs parameters :
 * ENABLE\_BPM\_BUILD : Process models build (true|false)
 * ENABLE\_MWS\_BUILD : My webMethods Server build (true|false)
 * ENABLE\_UM\_BUILD : Universal Messaging build (true|false)
-* ENABLE\_CS\_IMPORT : CentraSite import (true|false)
+* ENABLE\_AGW\_BUILD : API Gateway build (true|false)
 
 ## Pipeline workflow
 
@@ -244,7 +254,7 @@ Depending on parameters provided as inputs, below stages will be executed :
 1. Prepare workspace : always
 2. Checkout source code : always
 3. Build source code : always
-4. Deploy source code : any of ENABLE\_xxx\_BUILD=true or ENABLE\_CS\_IMPORT=true
+4. Deploy source code : any of ENABLE\_xxx\_BUILD=true
 
 
 _______________
