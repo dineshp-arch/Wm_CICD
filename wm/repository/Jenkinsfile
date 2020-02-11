@@ -138,7 +138,7 @@ pipeline {
 
 				expression {"${params.MODE}" == "Build&Deploy"}
 			}		
-			parallel {
+			stages {
 				stage ('IS') {
 					when {
 						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
@@ -191,7 +191,7 @@ pipeline {
 
 				expression {"${params.MODE}" == "Build&Deploy"}
 			}		
-			parallel {
+			stages {
 				stage ('IS') {
 					when {
 						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
