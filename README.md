@@ -110,7 +110,7 @@ Folders structure can be updated according to your needs, for example :
 
 ```
 ## IS (packages and config directory)
-dir.asset.is=esb
+dir.asset.is=packages
 ## BPM (Process models projects)
 dir.asset.bpm=bpm
 ## UM (realm export)
@@ -127,7 +127,7 @@ Which corresponds to an assets repository having the following structure
 ROOT_FOLDER/
            api
              /api.json
-           esb
+           packages
              /config
              /package1
              ...

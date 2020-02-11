@@ -133,6 +133,59 @@ pipeline {
 				}
 			}
 
+		stage ('Create projects') {
+			when {
+
+				expression {"${params.MODE}" == "Build&Deploy"}
+			}		
+			parallel {
+				stage ('IS') {
+					when {
+						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","IS","${params.BUILD_VERSION}") 
+					}
+			    }
+			    
+				stage ('BPM') {
+					when {
+						expression { "${params.ENABLE_BPM_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","BPM","${params.BUILD_VERSION}") 
+					}
+			    }
+				stage ('MWS') {
+					when {
+						expression { "${params.ENABLE_MWS_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MWS","${params.BUILD_VERSION}") 
+					}
+			    }
+
+				stage ('UM') {
+					when {
+						expression { "${params.ENABLE_UM_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","UM","${params.BUILD_VERSION}") 
+					}
+			    }
+
+				stage ('AGW') {
+					when {
+						expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
+					}
+			    }
+
+			}	
+		}
+
 		stage ('Deploy source code') {
 			when {
 
@@ -144,10 +197,7 @@ pipeline {
 						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
 					}
 					steps {
-
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","IS","${params.BUILD_VERSION}") 
 						deployProject(props,"${params.MODULE}","IS","${params.BUILD_VERSION}") 
-
 					}
 			    }
 			    
@@ -156,7 +206,6 @@ pipeline {
 						expression { "${params.ENABLE_BPM_BUILD}" == 'true' }
 					}
 					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","BPM","${params.BUILD_VERSION}") 
 						deployProject(props,"${params.MODULE}","BPM","${params.BUILD_VERSION}") 
 					}
 			    }
@@ -165,9 +214,7 @@ pipeline {
 						expression { "${params.ENABLE_MWS_BUILD}" == 'true' }
 					}
 					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MWS","${params.BUILD_VERSION}") 
 						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
-
 					}
 			    }
 
@@ -176,9 +223,7 @@ pipeline {
 						expression { "${params.ENABLE_UM_BUILD}" == 'true' }
 					}
 					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","UM","${params.BUILD_VERSION}") 
 						deployProject(props,"${params.MODULE}","UM","${params.BUILD_VERSION}") 
-
 					}
 			    }
 
@@ -187,8 +232,7 @@ pipeline {
 						expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
 					}
 					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","AGW","${params.BUILD_VERSION}") 
 					}
 			    }
 
@@ -241,6 +285,8 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 
     dirSagInstall=props['dir.install.build']
     dirTemplates="${workspace}/${dirUtils}/templates"
+    dirAssetVs="${dirWorkspace}/source/"+props['dir.asset.vs']
+
 	deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
 	deployerHost=props['deployer.host']	
 	deployerPort=props['deployer.port']
@@ -266,6 +312,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depSetName=props['dep.set.is']
 				depMapName=props['dep.map.is']
 				depCanName=props['dep.can.is']
+				varsubFile=props['dep.vs.is']
 			break
 		case "BPM":
 				xmlTemplate="${dirTemplates}/"+props['template.base.bpm']
@@ -280,6 +327,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depSetName=props['dep.set.bpm']
 				depMapName=props['dep.map.bpm']
 				depCanName=props['dep.can.bpm']
+				varsubFile=props['dep.vs.bpm']
 			break	    	
 		case "MWS":
 				xmlTemplate="${dirTemplates}/"+props['template.base.mws']
@@ -294,6 +342,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depSetName=props['dep.set.mws']
 				depMapName=props['dep.map.mws']
 				depCanName=props['dep.can.mws']
+				varsubFile=props['dep.vs.mws']
 			break 
 		case "UM":
 				xmlTemplate="${dirTemplates}/"+props['template.base.um']
@@ -304,9 +353,12 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				targetUser=props['target.user.um']
 				targetPwd=props['target.pwd.um']
 				targetVersion=props['target.version.um']							
+				targetSsl=props['target.ssl.um']							
 				depSetName=props['dep.set.um']
 				depMapName=props['dep.map.um']
 				depCanName=props['dep.can.um']
+				varsubFile=props['dep.vs.um']
+			break
 		case "AGW":
 				xmlTemplate="${dirTemplates}/"+props['template.base.agw']
 				xsltTemplate="${dirTemplates}/"+props['templete.xslt.agw']
@@ -320,6 +372,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depSetName=props['dep.set.agw']
 				depMapName=props['dep.map.agw']
 				depCanName=props['dep.can.agw']
+				varsubFile=props['dep.vs.agw']
 
 			break
 		default:
@@ -353,9 +406,31 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 		-Dtarget.version=${targetVersion} \
 		-Dtarget.ssl=${targetSsl} \
 		-Dcomposite.name=${assetPrefix} \
-		-Dbuild.version=${buildVersion}"	
+		-Dbuild.version=${buildVersion}"
+
+		try {
+			sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml importVarSubs \
+				-Dsag.install.dir=${dirSagInstall} \
+				-Dvs.dir=${dirAssetVs} \
+				-Dvs.file=${varsubFile} \
+				-Ddeployer.home=${deployerHome} \
+				-Ddeployer.host=${deployerHost} \
+				-Ddeployer.port=${deployerPort} \
+				-Ddeployer.user=${deployerUser} \
+				-Ddeployer.pwd=${deployerPwd} \
+				-Drepository.alias=${repositoryAlias} \
+				-Dproj.name=${projectName}\
+				-Ddeployment.name=${depSetName} \
+				-Dmap.name=${depMapName} \
+				-Dproj.map=$depMapName \
+				-Dtarget.alias=${targetAlias}"
+		} catch (Exception e) {
+				echo "Error during varsub import. Check the corresponding varsub file or perform the operations manually"
+				currentBuild.currentResult = "UNSTABLE"
+		}	
 
 }
+
 
 def deployProject(props, module, type, buildVersion) {
 

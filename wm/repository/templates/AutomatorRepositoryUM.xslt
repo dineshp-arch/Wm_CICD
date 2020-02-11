@@ -8,7 +8,8 @@
 	OR CONDITIONS OF ANY KIND, either express or implied. See the License for 
 	the specific language governing permissions and limitations under the License. -->
 <xsl:stylesheet
-	xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+	xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0"
+	xmlns:java="http://xml.apache.org/xslt/java" exclude-result-prefixes="java">
 	<xsl:output method="xml" encoding="utf-8" indent="yes" />
 	<xsl:param name="deployerHost" />
 	<xsl:param name="deployerPort" />
@@ -28,7 +29,6 @@
 	<xsl:param name="mapName" />
 	<xsl:param name="candidateName" />
 	<xsl:param name="buildVersion" />
-
 	<xsl:template match="@*|node()">
 		<xsl:copy>
 			<xsl:apply-templates select="@*|node()" />
@@ -51,7 +51,9 @@
 		<Environment>
 			<UniversalMessaging>
 				<universalmessagingalias>
-					<xsl:attribute name="name"><xsl:value-of select="$targetAlias" /></xsl:attribute>
+					<xsl:attribute name="name">
+						<xsl:value-of select="$targetAlias" />
+					</xsl:attribute>
 					<realmURL>
 						<xsl:value-of select="concat($targetHost ,':',$targetPort)" />
 					</realmURL>
@@ -70,119 +72,88 @@
 						<xsl:value-of select="$targetPassword" />
 					</pwd>
 					<Test>true</Test>
-
 				</universalmessagingalias>
 			</UniversalMessaging>
-
 			<Repository>
 				<repalias>
-					<xsl:attribute name="name"><xsl:value-of select="$sourceAlias" /></xsl:attribute>
+					<xsl:attribute name="name">
+						<xsl:value-of select="$sourceAlias" />
+					</xsl:attribute>
 					<type>FlatFile</type>
 					<urlOrDirectory>
 						<xsl:value-of select="$sourcePath" />
 					</urlOrDirectory>
-					<createIndex>true</createIndex>
+					<createIndex>false</createIndex>
 					<Test>true</Test>
 				</repalias>
 			</Repository>
-
 			<xsl:apply-templates select="@* | *" />
 		</Environment>
 	</xsl:template>
-
 	<xsl:template match="DeployerSpec/Projects">
+		<xsl:variable name="currentDate" select="java:format(java:java.text.SimpleDateFormat.new('yyyy-MM-dd HH:mm:ss'), java:java.util.Date.new())" />
 		<Projects>
 			<xsl:apply-templates select="@* | *" />
-			<Project type="Repository" overwrite="true"
-				ignoreMissingDependencies="true">
-
+			<Project type="Repository" overwrite="true" ignoreMissingDependencies="true">
 				<xsl:attribute name="description">
-          <xsl:value-of
-					select="concat('CICD Deployment v',$buildVersion)" />
-        </xsl:attribute>
-
+					<xsl:value-of select="concat('Auto generated project ', $buildVersion ,' (', $currentDate,' )' )"/>
+				</xsl:attribute>
 				<xsl:attribute name="name">
-          <xsl:value-of select="$projectName" />
-        </xsl:attribute>
-
+					<xsl:value-of select="$projectName" />
+				</xsl:attribute>
 				<DeploymentSet autoResolve="ignore">
-
 					<xsl:attribute name="description">
-            <xsl:value-of
-						select="concat($projectName,' IS DeploymentSet')" />
-          </xsl:attribute>
-
+						<xsl:value-of
+						select="concat($projectName,' UM DeploymentSet')" />
+					</xsl:attribute>
 					<xsl:attribute name="name">
-            <xsl:value-of select="$setName" />
-          </xsl:attribute>
-
+						<xsl:value-of select="$setName" />
+					</xsl:attribute>
 					<xsl:attribute name="srcAlias">
-            <xsl:value-of select="$sourceAlias" />
-          </xsl:attribute>
-
+						<xsl:value-of select="$sourceAlias" />
+					</xsl:attribute>
 					<Composite type="UniversalMessaging">
-
 						<xsl:attribute name="name">
-	            <xsl:value-of select="$compositeName" />
-	          </xsl:attribute>
-
+							<xsl:value-of select="$compositeName" />
+						</xsl:attribute>
 						<xsl:attribute name="srcAlias">
-	            <xsl:value-of select="$sourceAlias" />
-	          </xsl:attribute>
-
+							<xsl:value-of select="$sourceAlias" />
+						</xsl:attribute>
 					</Composite>
-
 				</DeploymentSet>
-
 				<DeploymentMap>
 					<xsl:attribute name="description">
-	            <xsl:value-of
-						select="concat($projectName,' IS Deployment Map')" />
-	         </xsl:attribute>
-
+						<xsl:value-of
+						select="concat($projectName,' UM Deployment Map')" />
+					</xsl:attribute>
 					<xsl:attribute name="name">
-				<xsl:value-of select="$mapName" />
-	         </xsl:attribute>
-
+						<xsl:value-of select="$mapName" />
+					</xsl:attribute>
 				</DeploymentMap>
-
 				<MapSetMapping>
-
 					<xsl:attribute name="mapName">
-				<xsl:value-of select="$mapName" />
-	         </xsl:attribute>
-
+						<xsl:value-of select="$mapName" />
+					</xsl:attribute>
 					<xsl:attribute name="setName">
-				<xsl:value-of select="$setName" />
-	         </xsl:attribute>
-
+						<xsl:value-of select="$setName" />
+					</xsl:attribute>
 					<alias type="UniversalMessaging">
 						<xsl:value-of select="$targetAlias" />
-
 					</alias>
 				</MapSetMapping>
-
 				<DeploymentCandidate>
-
 					<xsl:attribute name="description">
-	            <xsl:value-of
-						select="concat($projectName,' IS Deployment Candidate')" />
-	         </xsl:attribute>
-
+						<xsl:value-of
+						select="concat($projectName,' UM Deployment Candidate')" />
+					</xsl:attribute>
 					<xsl:attribute name="mapName">
-				<xsl:value-of select="$mapName" />
-	         </xsl:attribute>
-
+						<xsl:value-of select="$mapName" />
+					</xsl:attribute>
 					<xsl:attribute name="name">
-				<xsl:value-of select="$candidateName" />
-	         </xsl:attribute>
-
+						<xsl:value-of select="$candidateName" />
+					</xsl:attribute>
 				</DeploymentCandidate>
-
 			</Project>
 		</Projects>
 	</xsl:template>
-
-
-
 </xsl:stylesheet>

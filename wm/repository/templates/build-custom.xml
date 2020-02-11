@@ -126,8 +126,8 @@
 		              <comment value="!"/>
 		           </striplinecomments>
 		           <replacetokens>
-		                <token key="REPO_ALIAS" value="${repository.name}"/>
-			            <token key="DEPSET_NAME" value="${proj.depset}"/>
+		                <token key="REPO_ALIAS" value="${repository.alias}"/>
+			            <token key="DEPSET_NAME" value="${deployment.name}"/>
 			           	<token key="TARGET_ALIAS" value="${target.alias}"/>
 		            </replacetokens>
 		        </filterchain>
