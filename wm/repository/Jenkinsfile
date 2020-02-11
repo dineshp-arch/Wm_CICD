@@ -133,7 +133,7 @@ pipeline {
 				}
 			}
 
-		stage ('Create projects') {
+		stage ('Create and deploy projects') {
 			when {
 
 				expression {"${params.MODE}" == "Build&Deploy"}
@@ -145,6 +145,7 @@ pipeline {
 					}
 					steps {
 						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","IS","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","IS","${params.BUILD_VERSION}")
 					}
 			    }
 			    
@@ -154,6 +155,8 @@ pipeline {
 					}
 					steps {
 						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","BPM","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","BPM","${params.BUILD_VERSION}") 
+
 					}
 			    }
 				stage ('MWS') {
@@ -162,6 +165,8 @@ pipeline {
 					}
 					steps {
 						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MWS","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
+
 					}
 			    }
 
@@ -171,6 +176,8 @@ pipeline {
 					}
 					steps {
 						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","UM","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","UM","${params.BUILD_VERSION}") 
+
 					}
 			    }
 
@@ -180,65 +187,13 @@ pipeline {
 					}
 					steps {
 						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
-					}
-			    }
-
-			}	
-		}
-
-		stage ('Deploy source code') {
-			when {
-
-				expression {"${params.MODE}" == "Build&Deploy"}
-			}		
-			stages {
-				stage ('IS') {
-					when {
-						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
-					}
-					steps {
-						deployProject(props,"${params.MODULE}","IS","${params.BUILD_VERSION}") 
-					}
-			    }
-			    
-				stage ('BPM') {
-					when {
-						expression { "${params.ENABLE_BPM_BUILD}" == 'true' }
-					}
-					steps {
-						deployProject(props,"${params.MODULE}","BPM","${params.BUILD_VERSION}") 
-					}
-			    }
-				stage ('MWS') {
-					when {
-						expression { "${params.ENABLE_MWS_BUILD}" == 'true' }
-					}
-					steps {
-						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
-					}
-			    }
-
-				stage ('UM') {
-					when {
-						expression { "${params.ENABLE_UM_BUILD}" == 'true' }
-					}
-					steps {
-						deployProject(props,"${params.MODULE}","UM","${params.BUILD_VERSION}") 
-					}
-			    }
-
-				stage ('AGW') {
-					when {
-						expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
-					}
-					steps {
 						deployProject(props,"${params.MODULE}","AGW","${params.BUILD_VERSION}") 
+
 					}
 			    }
 
 			}	
 		}
-
 
 	}
 
