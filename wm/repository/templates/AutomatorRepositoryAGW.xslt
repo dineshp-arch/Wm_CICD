@@ -91,7 +91,7 @@
 					<urlOrDirectory>
 						<xsl:value-of select="$sourcePath"/>
 					</urlOrDirectory>
-					<createIndex>false</createIndex>
+					<createIndex>true</createIndex>
 					<Test>true</Test>
 				</repalias>
 			</Repository>
