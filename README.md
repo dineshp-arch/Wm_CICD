@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project is a framework that aims to implement continuous integration on webMethods platform using Jenkins installed on the same server as webMethods components (Asset Build Environment and WmDeployer)
+This project is a framework that aims to implement continuous integration on webMethods platform using Jenkins installed on the same server as webMethods components (Asset Build Environment and WmDeployer) on a windows server.
 
 ## Architecture
 
@@ -25,11 +25,15 @@ ssh-credentials
 jdk-tool
 ws-cleanup
 antisamy-markup-formatter
+HTML Publisher
+JUnit
 ```
 
 * webMethods installation : 10.x ( 10.1 and above)
 
-   * Integration Server : with Asset Build Environment and WmDeployer installed, this instance is used for build and deploy purpose
+   * Integration Server : with Asset Build Environment WmDeployer, Unit test framework installed, this instance is used for build and deploy purpose
+
+* Git installation (2.x)
 
 ## Supported assets
 
@@ -40,6 +44,7 @@ The following assets can be deployed with this framework :
 * UM : Universal Messaging assets
 * MWS : My webMethods server assets (Portlet, War...)
 * AGW : API Gateway assets
+* MFT : Active transfer assets (xml export)
 
 ## Configuration
 
@@ -119,6 +124,8 @@ dir.asset.um=um/UniversalMessaging
 dir.asset.mws=mws
 ## AGW (json extraction file)
 dir.asset.agw=api
+## MFT (export xml file)
+dir.asset.mft=mft
 ```
 
 Which corresponds to an assets repository having the following structure
@@ -138,6 +145,8 @@ ROOT_FOLDER/
              /ProcessProjectN
            um
              /UniversalMessaging/reaml_export.xml
+           mft
+             /export.xml
            mws
              /PortletProject1
              ...
@@ -185,6 +194,7 @@ Where COMPONENT can have the following values :
 * um : Universal Messaging target
 * mws : My webMethods server target
 * agw : API Gateway server target
+* mft : Active transfer server target
 
 For API Gateway only, update the following properties in order to extract assets from a source API Gateway : 
 
@@ -192,6 +202,26 @@ For API Gateway only, update the following properties in order to extract assets
 * source.user.agw : source API Gateway user
 * source.pwd.agw: source API Gateway password
 * source.assets.file.agw : json extraction file (refer to API Gateway documentation) 
+
+#### Unit test framework configuration
+
+Update the following properties used by Unit Test framework: 
+
+```
+dir.testsuite.reports=<DIR_REPORTS>
+testsuite.package.postfix=<UNIT_TEST_POSTFIX>
+target.port.<COMPONENT>=<TARGET_PORT>
+target.user.<COMPONENT>=<TARGET_USER>
+target.pwd.<COMPONENT>=<TARGET_PWD>
+target.version.<COMPONENT>=<TARGET_VERSION>
+target.ssl.<COMPONENT>=false|true
+```
+
+Where :
+
+* DIR_REPORTS : Unit test framework report directory
+* UNIT_TEST_POSTFIX : key word used to filter on packages containing Unit test framework setup and data files (ex : _TestSuite)
+
 
 #### Artifact repository configuration (Nexus)
 
@@ -244,6 +274,8 @@ Run created job by providing inputs parameters :
 * ENABLE\_MWS\_BUILD : My webMethods Server build (true|false)
 * ENABLE\_UM\_BUILD : Universal Messaging build (true|false)
 * ENABLE\_AGW\_BUILD : API Gateway build (true|false)
+* ENABLE\_MFT\_BUILD : Active transfer build (true|false)
+* RUN\_WM\_TEST\_SUITE : Execute Unit Test Framework (true|false)
 
 ## Pipeline workflow
 

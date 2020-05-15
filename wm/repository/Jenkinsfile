@@ -1,8 +1,8 @@
 //Global variable definition
 def repoUtilsUrl="https://github.com/aminemerdassi/ps-devops-cicd-sample.git"
-def repoUtilsBranch="master"
+def repoUtilsBranch="develop"
 def repoUtilsCredential = "CREDENTIAL_GITHUB_USERNAME"
-def dirUtils="wm/repository" 
+def dirUtils="wm\\repository" 
 def props
 def dirWorkspace
 
@@ -12,9 +12,9 @@ node {
 
 	git branch: "${repoUtilsBranch}", credentialsId: "${repoUtilsCredential}", url: "${repoUtilsUrl}"
 	
-	brancheParams = readFile "${dirUtils}/parameters/branches.properties"
-	envParams = readFile "${dirUtils}/parameters/env.properties"
-	moduleParams = readFile "${dirUtils}/parameters/modules.properties"
+	brancheParams = readFile "${dirUtils}\\parameters\\branches.properties"
+	envParams = readFile "${dirUtils}\\parameters\\env.properties"
+	moduleParams = readFile "${dirUtils}\\parameters\\modules.properties"
 	
 	
 }
@@ -69,6 +69,14 @@ pipeline {
 		    choices: 'false\ntrue',
 		    description: 'Enable AGW Build',
 		    name: 'ENABLE_AGW_BUILD')
+	    choice(
+		    choices: 'false\ntrue',
+		    description: 'Enable MFT Build',
+		    name: 'ENABLE_MFT_BUILD')
+	    choice(
+		    choices: 'false\ntrue',
+		    description: 'Run WmTestSuite',
+		    name: 'RUN_WM_TEST_SUITE')
 	}
 
 
@@ -84,14 +92,15 @@ pipeline {
                 	currentBuild.description = "${MODULE} ${BUILD_VERSION}.${BUILD_ID} deployment on ${ENVIRONMENT} from branch ${BRANCH}"
                 	
 	            	//Read properties from file
-	            	props = readProperties file: "${dirUtils}/properties/build_"+"${params.ENVIRONMENT}".toLowerCase()+".properties"
-	            	dirWorkspace = props['dir.workspace'] +"/${params.ENVIRONMENT}/"+ props['dir.'+"${params.MODULE}".toLowerCase()]
+	            	props = readProperties file: "${dirUtils}\\properties\\build_"+"${params.ENVIRONMENT}".toLowerCase()+".properties"
+	            	dirWorkspace = props['dir.workspace'] +"\\${params.ENVIRONMENT}\\"+ props['dir.'+"${params.MODULE}".toLowerCase()]
             	
 	            	//Create workspace subdirectories (used by ABE)
-	                sh "mkdir -p ${dirWorkspace}/archive;\
-					    mkdir -p ${dirWorkspace}/logs;\
-					    mkdir -p ${dirWorkspace}/source;\
-					    mkdir -p ${dirWorkspace}/builds;"
+	                bat "if not exist ${dirWorkspace}\\archive mkdir ${dirWorkspace}\\archive"
+	                bat "if not exist ${dirWorkspace}\\logs mkdir ${dirWorkspace}\\logs"
+	                bat "if not exist ${dirWorkspace}\\source mkdir ${dirWorkspace}\\source"
+	                bat "if not exist ${dirWorkspace}\\builds mkdir ${dirWorkspace}\\builds"
+
 	            }
 	        }
 	    }
@@ -110,7 +119,7 @@ pipeline {
 	            	repositoryAssetsUrl=props['repo.url.'+"${params.MODULE}".toLowerCase()]
 	            	repoAssetsCredential=props['repo.credential.'+"${params.MODULE}".toLowerCase()]
 	            	
-	                dir("${dirWorkspace}/source"){
+	                dir("${dirWorkspace}\\source"){
 	                   git branch: "${params.BRANCH}", credentialsId: "${repoAssetsCredential}", url: "${repositoryAssetsUrl}"
 	                }
 	            }
@@ -127,7 +136,7 @@ pipeline {
 			}
 			steps {
 						
-					buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}","${params.ENABLE_AGW_BUILD}")
+					buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}","${params.ENABLE_AGW_BUILD}","${params.ENABLE_MFT_BUILD}")
 					uploadArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}")
 				
 				}
@@ -192,15 +201,38 @@ pipeline {
 					}
 			    }
 
+				stage ('MFT') {
+					when {
+						expression { "${params.ENABLE_MFT_BUILD}" == 'true' }
+					}
+					steps {
+						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MFT","${params.BUILD_VERSION}") 
+						deployProject(props,"${params.MODULE}","MFT","${params.BUILD_VERSION}") 
+
+					}
+			    }
+
 			}	
 		}
+
+		stage('Run Test suite') {
+			when {
+				expression { "${params.RUN_WM_TEST_SUITE}" == 'true' }
+			}
+			steps {
+						
+					runUnitTests(props,"${dirWorkspace}","${dirUtils}")
+				
+				}
+			}
+
 
 	}
 
 }
 
 
-def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild, enableAgwBuild) {
+def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild, enableAgwBuild, enableMftBuild) {
     
     dirSagInstall=props['dir.install.build']
     dirAssetIS=props['dir.asset.is']
@@ -208,25 +240,28 @@ def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild
     dirAssetMWS=props['dir.asset.mws']
     dirAssetUM=props['dir.asset.um']
     dirAssetAGW=props['dir.asset.agw']
+    dirAssetMFT=props['dir.asset.mft']
     
     sourceUrlAGW=props['source.url.agw']
     sourceUserAGW=props['source.user.agw']
     sourcePwdAGW=props['source.pwd.agw']
-    sourceAssetFileAGW="${dirWorkspace}/source/${dirAssetAGW}/"+props['source.assets.file.agw']
+    sourceAssetFileAGW="${dirWorkspace}\\source\\${dirAssetAGW}\\"+props['source.assets.file.agw']
 
-	sh "rm -rf ${dirWorkspace}/builds/*"
+	bat "if exist ${dirWorkspace}\\builds rmdir /Q /S ${dirWorkspace}\\builds\\"
 	
-	sh "${dirSagInstall}/common/AssetBuildEnvironment/bin/build.sh\
+	bat "${dirSagInstall}\\common\\AssetBuildEnvironment\\bin\\build.bat\
          -Dsag.install.dir=${dirSagInstall}\
-         -Dbuild.source.dir=${dirWorkspace}/source/$dirAssetIS\\;${dirWorkspace}/source/$dirAssetBPM\\;${dirWorkspace}/source/$dirAssetMWS\\;${dirWorkspace}/source/$dirAssetUM\
-         -Dbuild.output.dir=${dirWorkspace}/builds\
+         -Dbuild.source.dir=\"${dirWorkspace}\\source\\${dirAssetIS}\\;${dirWorkspace}\\source\\${dirAssetBPM}\\;${dirWorkspace}\\source\\${dirAssetMWS}\\;${dirWorkspace}\\source\\${dirAssetUM}\\;${dirWorkspace}\\source\\${dirAssetMFT}\"\
+         -Dbuild.output.dir=${dirWorkspace}\\builds\
          -Dbuild.version=${buildVersion}\
-         -Dbuild.archive.dir=${dirWorkspace}/archive\
-         -Dbuild.log.fileName=${dirWorkspace}/logs/log_" + "${buildVersion}" + ".txt\
+         -Dbuild.archive.dir=${dirWorkspace}\\archive\
+         -Dbuild.log.fileName=${dirWorkspace}\\logs\\log_" + "${buildVersion}" + ".txt\
          -Denable.build.IS=${enableIsBuild}\
          -Denable.build.BPM=${enableBpmBuild}\
          -Denable.build.MWS=${enableMwsBuild}\
          -Denable.build.UniversalMessaging=${enableUmBuild}\
+         -Denable.build.MFT=${enableMftBuild}\
+         -Dbuild.source.project.dir=${dirWorkspace}\\source\\${dirAssetMFT}\
 		 -Denable.build.APIGateway=$enableAgwBuild\
 		 -Dapigateway.is.url=$sourceUrlAGW\
 		 -Dapigateway.is.username=$sourceUserAGW\
@@ -239,10 +274,10 @@ def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild
 def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buildVersion) {
 
     dirSagInstall=props['dir.install.build']
-    dirTemplates="${workspace}/${dirUtils}/templates"
-    dirAssetVs="${dirWorkspace}/source/"+props['dir.asset.vs']
+    dirTemplates="${workspace}\\${dirUtils}\\templates"
+    dirAssetVs="${dirWorkspace}\\source\\"+props['dir.asset.vs']
 
-	deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
+	deployerHome=props['dir.install.build']+"\\"+props['dir.install.deployer']
 	deployerHost=props['deployer.host']	
 	deployerPort=props['deployer.port']
 	deployerUser=props['deployer.user']
@@ -250,13 +285,13 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 
 	projectName = "${module}_${type}_${buildVersion}"	
 	repositoryAlias="${module}_Repo"
-	repositoryPath="${dirWorkspace}/builds"
-	automatorFile = "${dirWorkspace}/${module}_Automator${type}_${buildVersion}.xml"
+	repositoryPath="${dirWorkspace}\\builds"
+	automatorFile = "${dirWorkspace}\\${module}_Automator${type}_${buildVersion}.xml"
 	    
 	switch("${type}") {
 		case "IS":
-				xmlTemplate="${dirTemplates}/"+props['template.base.is']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.is']
+				xmlTemplate="${dirTemplates}\\"+props['template.base.is']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.is']
 				targetAlias=props['target.alias.is']
 				targetHost=props['target.host.is']
 				targetPort=props['target.port.is']
@@ -270,8 +305,8 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				varsubFile=props['dep.vs.is']
 			break
 		case "BPM":
-				xmlTemplate="${dirTemplates}/"+props['template.base.bpm']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.bpm']
+				xmlTemplate="${dirTemplates}\\"+props['template.base.bpm']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.bpm']
 				targetAlias=props['target.alias.bpm']
 				targetHost=props['target.host.bpm']
 				targetPort=props['target.port.bpm']
@@ -285,8 +320,8 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				varsubFile=props['dep.vs.bpm']
 			break	    	
 		case "MWS":
-				xmlTemplate="${dirTemplates}/"+props['template.base.mws']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.mws']
+				xmlTemplate="${dirTemplates}\\"+props['template.base.mws']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.mws']
 				targetAlias=props['target.alias.mws']
 				targetHost=props['target.host.mws']
 				targetPort=props['target.port.mws']
@@ -300,8 +335,8 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				varsubFile=props['dep.vs.mws']
 			break 
 		case "UM":
-				xmlTemplate="${dirTemplates}/"+props['template.base.um']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.um']
+				xmlTemplate="${dirTemplates}\\"+props['template.base.um']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.um']
 				targetAlias=props['target.alias.um']
 				targetHost=props['target.host.um']
 				targetPort=props['target.port.um']
@@ -315,8 +350,8 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				varsubFile=props['dep.vs.um']
 			break
 		case "AGW":
-				xmlTemplate="${dirTemplates}/"+props['template.base.agw']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.agw']
+				xmlTemplate="${dirTemplates}\\"+props['template.base.agw']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.agw']
 				targetAlias=props['target.alias.agw']
 				targetHost=props['target.host.agw']
 				targetPort=props['target.port.agw']
@@ -328,16 +363,30 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 				depMapName=props['dep.map.agw']
 				depCanName=props['dep.can.agw']
 				varsubFile=props['dep.vs.agw']
-
+			break
+		case "MFT":
+				xmlTemplate="${dirTemplates}\\"+props['template.base.mft']
+				xsltTemplate="${dirTemplates}\\"+props['templete.xslt.mft']
+				targetAlias=props['target.alias.mft']
+				targetHost=props['target.host.mft']
+				targetPort=props['target.port.mft']
+				targetUser=props['target.user.mft']
+				targetPwd=props['target.pwd.mft']
+				targetVersion=props['target.version.mft']							
+				targetSsl=props['target.ssl.mft']							
+				depSetName=props['dep.set.mft']
+				depMapName=props['dep.map.mft']
+				depCanName=props['dep.can.mft']
+				varsubFile=props['dep.vs.mft']
 			break
 		default:
 			error("Unsupported project type : ${type}")    
 			break
 	}
-	    //For wM9.x versions ant is located in ${dirSagInstall}/common/AssetBuildEnvironment/ant/bin/ant
-	    //For wM10.x versions ant is located in ${dirSagInstall}/common/lib/ant/bin/ant
+	    //For wM9.x versions ant is located in ${dirSagInstall}\\common\\AssetBuildEnvironment\\ant\\bin\\ant
+	    //For wM10.x versions ant is located in ${dirSagInstall}\\common\\lib\\ant\\bin\\ant
 	    
-		sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml createRepositoryProject \
+		bat "${dirSagInstall}\\common\\lib\\ant\\bin\\ant -file $dirTemplates\\build-custom.xml createRepositoryProject \
         -Dsag.install.dir=${dirSagInstall}\
 		-Dautomator.file=${automatorFile} \
 		-Dautomator.template=${xmlTemplate} \
@@ -360,11 +409,11 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 		-Dtarget.pwd=${targetPwd} \
 		-Dtarget.version=${targetVersion} \
 		-Dtarget.ssl=${targetSsl} \
-		-Dcomposite.name=${assetPrefix} \
+		-Dcomposite.name=\"${assetPrefix}\" \
 		-Dbuild.version=${buildVersion}"
 
 		try {
-			sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml importVarSubs \
+			bat "${dirSagInstall}\\common\\lib\\ant\\bin\\ant -file $dirTemplates\\build-custom.xml importVarSubs \
 				-Dsag.install.dir=${dirSagInstall} \
 				-Dvs.dir=${dirAssetVs} \
 				-Dvs.file=${varsubFile} \
@@ -390,7 +439,7 @@ def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buil
 def deployProject(props, module, type, buildVersion) {
 
 	projectName = "${module}_${type}_${buildVersion}"
-	deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
+	deployerHome=props['dir.install.build']+"\\"+props['dir.install.deployer']
 	deployerHost=props['deployer.host']	
 	deployerPort=props['deployer.port']
 	deployerUser=props['deployer.user']
@@ -412,13 +461,16 @@ def deployProject(props, module, type, buildVersion) {
 		case "AGW":
 				depCanName=props['dep.can.agw']		
 			break
+		case "MFT":
+				depCanName=props['dep.can.mft']		
+			break
 		default:
 			error("Unsupported project type : ${type}")    
 			break
 	}
 
-	sh "${deployerHome}/bin/Deployer.sh --checkpoint -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
-	sh "${deployerHome}/bin/Deployer.sh --deploy -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
+	bat "${deployerHome}\\bin\\Deployer.bat --checkpoint -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
+	bat "${deployerHome}\\bin\\Deployer.bat --deploy -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
 	
 }
 
@@ -429,14 +481,51 @@ def uploadArchive(props,dirWorkspace,buildVersion) {
 	repoArtifactPath = props['repo.artifact.path.abe']
 
 
-	dir("${dirWorkspace}/builds") {
-		sh "zip -r ${buildVersion}.zip ."
+	dir("${dirWorkspace}\\builds") {
+		bat "tar -zcvf ..\\${buildVersion}.tar.gz *"
 		withCredentials([usernamePassword(credentialsId: "${repoArtifactCredential}", usernameVariable: "artifactUser", passwordVariable: "artifactPwd")]) {
-			sh "curl -v -u ${artifactUser}:${artifactPwd} --upload-file ${buildVersion}.zip ${repoArtifactUrl}/${repoArtifactPath}/${buildVersion}.zip"
+			bat "curl -v -u ${artifactUser}:${artifactPwd} --upload-file ..\\${buildVersion}.tar.gz ${repoArtifactUrl}/${repoArtifactPath}/${buildVersion}.tar.gz"
 		}
-		sh "rm -rf ${buildVersion}.zip"
+	    bat "del /f ..\\${buildVersion}.tar.gz"
 
 	}       
+}
+
+
+def runUnitTests(props,dirWorkspace,dirUtils) {
+
+    dirSagInstall=props['dir.install.build']
+    dirTestsuite="${workspace}\\${dirUtils}\\testsuite"
+    dirAssetIS=props['dir.asset.is']
+	dirTestSuiteReports="${workspace}\\"+props['dir.testsuite.reports']
+	dirTestSuiteRoot="${dirWorkspace}\\source\\${dirAssetIS}"
+	targetHost=props['target.host.is']
+	targetPort=props['target.port.is']
+	targetUser=props['target.user.is']
+	targetPwd=props['target.pwd.is']
+	testSuitePackagePostFix=props['testsuite.package.postfix']
+	
+	dirTestSuiteSetup = bat returnStdout: true, script: "@echo off && for /f \"delims=\" %%i in (\'dir /b /ad ${dirTestSuiteRoot}\\*${testSuitePackagePostFix}*') do @echo ${dirTestSuiteRoot}\\%%i".trim()
+	dirTestSuiteSetup= dirTestSuiteSetup.readLines().join(",")
+			
+	bat "${dirSagInstall}\\common\\lib\\ant\\bin\\ant -file ${dirTestsuite}\\run-composite-runner.xml composite-runner-all-tests\
+	 -DwebMethods.home=${dirSagInstall} \
+	 -DwebMethods.integrationServer.name=${targetHost} \
+	 -DwebMethods.integrationServer.port=${targetPort} \
+	 -DwebMethods.integrationServer.userid=${targetUser} \
+	 -DwebMethods.integrationServer.password=${targetPwd} \
+	 -DwebMethods.test.setup.profile.mode=NONE \
+	 -DwebMethods.test.setup.location=${dirTestSuiteSetup} \
+	 -Dtest.reports.dir=${dirTestSuiteReports}"
+	 
+	publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: "$dirTestSuiteReports/html", reportFiles: '*.html', reportName: "WmTestSuite Result Report", reportTitles: 'WmTestSuiteResult'])
+
+	dir("$dirTestSuiteReports") {
+		junit "*.xml"
+	}
+
+
+
 }
 
 
