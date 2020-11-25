@@ -6,7 +6,7 @@ This project is a framework that aims to implement continuous integration on web
 
 ## Architecture
 
-![Deployment architecture](/resources/img/architecture.png)
+![Deployment architecture](./resources/img/architecture.png)
 
 Command Central is not covered in this demo.
 
