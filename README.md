@@ -6,7 +6,7 @@ This project is a framework that aims to implement continuous integration on web
 
 ## Architecture
 
-![Deployment architecture](/resources/img/architecture.png)
+![Deployment architecture](./resources/img/architecture.png)
 
 Command Central is not covered in this demo.
 
@@ -70,7 +70,7 @@ Where :
 
 These information will be used to checkout and populate the parameters fields for the job by reading the properties files located in "parameters" folder.
 
-### Update build_<env>.properties
+### Update build_\<env\>.properties
 
 In order to configure the environment update build_<env>.properties file located in "properties" folder. 
 
@@ -209,7 +209,7 @@ Where :
 * NEXUS_URL : URL of the repository
 * NEXUS_FOLDER_ABE : Folder where ACDL build output will be stored
 
-![Nexus folders](/resources/img/nexus_folders.png)
+![Nexus folders](./resources/img/nexus_folders.png)
 
 ### Jenkins job 
 
@@ -247,7 +247,7 @@ Run created job by providing inputs parameters :
 
 ## Pipeline workflow
 
-![Pipeline workflow](/resources/img/workflow.png)
+![Pipeline workflow](./resources/img/workflow.png)
 
 Depending on parameters provided as inputs, below stages will be executed :
 
