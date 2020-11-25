@@ -6,7 +6,7 @@ This project is a framework that aims to implement continuous integration on web
 
 ## Architecture
 
-![Deployment architecture](./resources/img/architecture.png)
+![Deployment architecture](./cicd-sample/resources/img/architecture.png)
 
 Command Central is not covered in this demo.
 
@@ -239,7 +239,7 @@ Where :
 * NEXUS_URL : URL of the repository
 * NEXUS_FOLDER_ABE : Folder where ACDL build output will be stored
 
-![Nexus folders](/resources/img/nexus_folders.png)
+![Nexus folders](./cicd-sample/resources/img/nexus_folders.png)
 
 ### Jenkins job 
 
@@ -279,7 +279,7 @@ Run created job by providing inputs parameters :
 
 ## Pipeline workflow
 
-![Pipeline workflow](/resources/img/workflow.png)
+![Pipeline workflow](./cicd-sample/resources/img/workflow.png)
 
 Depending on parameters provided as inputs, below stages will be executed :
 
