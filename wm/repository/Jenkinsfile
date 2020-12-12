@@ -1,206 +1,244 @@
 //Global variable definition
-def repoUtilsUrl="https://github.com/aminemerdassi/ps-devops-cicd-sample.git"
-def repoUtilsBranch="master"
-def repoUtilsCredential = "CREDENTIAL_GITHUB_USERNAME"
 def dirUtils="wm/repository" 
 def props
-def dirWorkspace
+def dirWorkspace        // local workspace
+def targetPackages      // Packages to be included in build
+def module              // Selected module 
+def targetEnvironment   // Selected target environement
 
 node {
-	
-	cleanWs()
+    
+    cleanWs()
 
-	git branch: "${repoUtilsBranch}", credentialsId: "${repoUtilsCredential}", url: "${repoUtilsUrl}"
-	
-	brancheParams = readFile "${dirUtils}/parameters/branches.properties"
-	envParams = readFile "${dirUtils}/parameters/env.properties"
-	moduleParams = readFile "${dirUtils}/parameters/modules.properties"
-	
-	
+    checkout scm    // Checkout framework using SCM properties configured at pipeline level
+    
+    brancheParams = readFile "${dirUtils}/parameters/branches.properties"
+    envParams = readFile "${dirUtils}/parameters/env.properties"
+    moduleParams = readFile "${dirUtils}/parameters/modules.properties"
 }
 
 pipeline {
 
-	agent any
-	
-	options { 
-		disableConcurrentBuilds() 
-	}
-	
-	parameters {
+    agent any
+    
+    options { 
+        skipDefaultCheckout true
+        skipStagesAfterUnstable()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr:'10'))
+        timestamps()
+        ansiColor("xterm")
+    }
+    
+    parameters {
 
-	    choice(
-		    choices: 'Build\nBuild&Deploy',
-		    description: 'Mode',
-		    name: 'MODE')
+        choice(
+            choices: 'Build\nBuild&Deploy',
+            description: 'Mode',
+            name: 'MODE')
         string(
-        	defaultValue: "x.x.x", 
-        	description: 'Build version', 
-        	name: 'BUILD_VERSION')
+            defaultValue: "x.x.x", 
+            description: 'Build version', 
+            name: 'BUILD_VERSION',
+            trim: true)
         choice(
             choices: "${moduleParams}",
             description: 'Module to build',
             name: 'MODULE')
-		choice(
+        choice(
             choices: "${brancheParams}",
             description: 'Branch to build',
             name: 'BRANCH')
-		choice(
+        string(
+            description: "Tag to build",
+            name: "TAG",
+            trim: true)
+        choice(
             choices: "${envParams}",
             description: 'Environment',
             name: 'ENVIRONMENT')
-	    choice(
-		    choices: 'false\ntrue',
-		    description: 'Enable IS Build',
-		    name: 'ENABLE_IS_BUILD')
-	    choice(
-		    choices: 'false\ntrue',
-		    description: 'Enable BPM Build',
-		    name: 'ENABLE_BPM_BUILD')
-	    choice(
-		    choices: 'false\ntrue',
-		    description: 'Enable MWS Build',
-		    name: 'ENABLE_MWS_BUILD')
-	    choice(
-		    choices: 'false\ntrue',
-		    description: 'Enable UM Build',
-		    name: 'ENABLE_UM_BUILD')
-	    choice(
-		    choices: 'false\ntrue',
-		    description: 'Enable AGW Build',
-		    name: 'ENABLE_AGW_BUILD')
-	}
+        choice(
+            choices: 'false\ntrue',
+            description: 'Enable IS Build',
+            name: 'ENABLE_IS_BUILD')
+        choice(
+            choices: 'false\ntrue',
+            description: 'Enable BPM Build',
+            name: 'ENABLE_BPM_BUILD')
+        choice(
+            choices: 'false\ntrue',
+            description: 'Enable MWS Build',
+            name: 'ENABLE_MWS_BUILD')
+        choice(
+            choices: 'false\ntrue',
+            description: 'Enable UM Build',
+            name: 'ENABLE_UM_BUILD')
+        choice(
+            choices: 'false\ntrue',
+            description: 'Enable AGW Build',
+            name: 'ENABLE_AGW_BUILD')
+    }
 
 
-	stages {
-		
-		/** Read build properties file and create workspace directories **/
-	    stage ('Prepare worspace') {
-	        steps {
-	            script {
-					
-					//Update build display
-			    	currentBuild.displayName = "${MODULE}_${BUILD_VERSION}.${BUILD_ID}"
-                	currentBuild.description = "${MODULE} ${BUILD_VERSION}.${BUILD_ID} deployment on ${ENVIRONMENT} from branch ${BRANCH}"
-                	
-	            	//Read properties from file
-	            	props = readProperties file: "${dirUtils}/properties/build_"+"${params.ENVIRONMENT}".toLowerCase()+".properties"
-	            	dirWorkspace = props['dir.workspace'] +"/${params.ENVIRONMENT}/"+ props['dir.'+"${params.MODULE}".toLowerCase()]
-            	
-	            	//Create workspace subdirectories (used by ABE)
-	                sh "mkdir -p ${dirWorkspace}/archive;\
-					    mkdir -p ${dirWorkspace}/logs;\
-					    mkdir -p ${dirWorkspace}/source;\
-					    mkdir -p ${dirWorkspace}/builds;"
-	            }
-	        }
-	    }
-	        	    
-	    
-	    stage ('Checkout source code') {
-			when {
-    			anyOf {
-					expression {"${params.MODE}" == "Build"}
-					expression {"${params.MODE}" == "Build&Deploy"}
-    			}
-			}
-	        steps {
-	            script {
-	            	
-	            	repositoryAssetsUrl=props['repo.url.'+"${params.MODULE}".toLowerCase()]
-	            	repoAssetsCredential=props['repo.credential.'+"${params.MODULE}".toLowerCase()]
-	            	
-	                dir("${dirWorkspace}/source"){
-	                   git branch: "${params.BRANCH}", credentialsId: "${repoAssetsCredential}", url: "${repositoryAssetsUrl}"
-	                }
-	            }
-	        }
-	    }	    
-	    
-	    
-		stage('Build source code') {
-			when {
-    			anyOf {
-					expression {"${params.MODE}" == "Build"}
-					expression {"${params.MODE}" == "Build&Deploy"}
-    			}
-			}
-			steps {
-						
-					buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}","${params.ENABLE_AGW_BUILD}")
-					uploadArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}")
-				
+    stages {
+        /** Read build properties file and create workspace directories **/
+        stage ('Prepare worspace') {
+            steps {
+                script {
+                    
+                    branchOrTagToCheckout = sh(
+                        script: 'echo ${TAG:-${BRANCH}}',
+                        returnStdout: true).trim()
+                    module = MODULE.trim().toLowerCase()
+                    targetEnvironment = ENVIRONMENT.trim().toLowerCase()
+                    //Update build display
+                    currentBuild.displayName = "${MODULE}_${BUILD_VERSION}.${BUILD_ID}"
+                    currentBuild.description = "${MODULE} ${BUILD_VERSION}.${BUILD_ID} deployment on ${ENVIRONMENT} from ${branchOrTagToCheckout}"
+                    
+                    //Read properties from file
+                    props = readProperties file: "${dirUtils}/properties/build_"+targetEnvironment+".properties"
+                    dirWorkspace = props['dir.workspace'] +"/${params.ENVIRONMENT}/"+ [module]
+
+                    //Create workspace subdirectories (used by ABE)
+                    sh "mkdir -p ${dirWorkspace}/archive;\
+                        mkdir -p ${dirWorkspace}/logs;\
+                        mkdir -p ${dirWorkspace}/source;\
+                        mkdir -p ${dirWorkspace}/builds;"
+                }
+            }
+        }
+                    
+        
+        stage ('Checkout source code') {
+            when {
+                anyOf {
+                    expression {"${params.MODE}" == "Build"}
+                    expression {"${params.MODE}" == "Build&Deploy"}
+                }
+            }
+            steps {
+                script {
+                    
+                    repositoryAssetsUrl=props['repo.url.' + module]
+                    repoAssetsCredential=props['repo.credential.' + module]
+                    
+                    dir("${dirWorkspace}/source"){
+                        checkout(
+                            [$class: 'GitSCM',
+                            branches: [[name: "${branchOrTagToCheckout}"]],
+                            doGenerateSubmoduleConfigurations: false,
+                            extensions:[],
+                            submoduleCfg:[],
+                            userRemoteConfigs: [[
+                                credentialsId: repoAssetsCredential, 
+                                url: repositoryAssetsUrl]]])
+                        packages = sh(
+                            script: 'for f in $(find . -name "manifest.v3"); do echo $(basename $(dirname $f)); done',
+                            returnStdout: true
+                        ).trim().split("\\r?\\n")
+                        pkgToExclude = props['is.packages.exclude.'+module]
+                        if(pkgToExclude!=null && !pkgToExclude.isEmpty()) {
+                            echo "Compute package exclusion rule"
+                            excludedPackages = pkgToExclude.split(",")
+                            targetPackages = packages - excludedPackages
+                        } else {
+                            targetPackages = packages
+                        }
+                    }
+                }
+            }
+        }       
+        
+        stage('Build source code') {
+            when {
+                anyOf {
+                    expression {"${params.MODE}" == "Build"}
+                    expression {"${params.MODE}" == "Build&Deploy"}
+                }
+            }
+            steps {
+                        
+                    buildAsRepo(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}","${params.ENABLE_IS_BUILD}","${params.ENABLE_BPM_BUILD}","${params.ENABLE_MWS_BUILD}","${params.ENABLE_UM_BUILD}","${params.ENABLE_AGW_BUILD}", targetPackages)
+                    // uploadArchive(props,"${dirWorkspace}","${params.BUILD_VERSION}.${BUILD_ID}")
+                
+                }
+            }
+
+        stage ('Create and deploy projects') {
+            when {
+
+                expression {"${params.MODE}" == "Build&Deploy"}
+            }       
+            stages {
+                stage ('IS') {
+                    when {
+                        expression { "${params.ENABLE_IS_BUILD}" == 'true' }
+                    
+                    steps {
+                        createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","IS","${params.BUILD_VERSION}") 
+                        deployProject(props,"${params.MODULE}","IS","${params.BUILD_VERSION}")
+                    }
+                }
+                }
+                stage ('BPM') {
+                    when {
+                        expression { "${params.ENABLE_BPM_BUILD}" == 'true' }
+                   
+                    steps {
+                        createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","BPM","${params.BUILD_VERSION}") 
+                        deployProject(props,"${params.MODULE}","BPM","${params.BUILD_VERSION}") 
+
+                    }
+                }
 				}
-			}
+                stage ('MWS') {
+                    when {
+                        expression { "${params.ENABLE_MWS_BUILD}" == 'true' }
+                    
+                    steps {
+                        createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MWS","${params.BUILD_VERSION}") 
+                        deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
 
-		stage ('Create and deploy projects') {
-			when {
+                    }
+                }
+				}
+                stage ('UM') {
+                    when {
+                        expression { "${params.ENABLE_UM_BUILD}" == 'true' }
+                   
+                    steps {
+                        createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","UM","${params.BUILD_VERSION}") 
+                        deployProject(props,"${params.MODULE}","UM","${params.BUILD_VERSION}") 
 
-				expression {"${params.MODE}" == "Build&Deploy"}
-			}		
-			stages {
-				stage ('IS') {
-					when {
-						expression { "${params.ENABLE_IS_BUILD}" == 'true' }
-					}
-					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","IS","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","IS","${params.BUILD_VERSION}")
-					}
-			    }
-			    
-				stage ('BPM') {
-					when {
-						expression { "${params.ENABLE_BPM_BUILD}" == 'true' }
-					}
-					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","BPM","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","BPM","${params.BUILD_VERSION}") 
+                    }
+                }
+				}
+                stage ('AGW') {
+                    when {
+                        expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
+                    
+                    steps {
+                        createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
+                        deployProject(props,"${params.MODULE}","AGW","${params.BUILD_VERSION}") 
 
-					}
-			    }
-				stage ('MWS') {
-					when {
-						expression { "${params.ENABLE_MWS_BUILD}" == 'true' }
-					}
-					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","MWS","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","MWS","${params.BUILD_VERSION}") 
+                    }
+                }
+				}
 
-					}
-			    }
+             
+        }
 
-				stage ('UM') {
-					when {
-						expression { "${params.ENABLE_UM_BUILD}" == 'true' }
-					}
-					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","UM","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","UM","${params.BUILD_VERSION}") 
-
-					}
-			    }
-
-				stage ('AGW') {
-					when {
-						expression { "${params.ENABLE_AGW_BUILD}" == 'true' }
-					}
-					steps {
-						createProject(props,"${dirWorkspace}","${dirUtils}","${params.MODULE}","*","AGW","${params.BUILD_VERSION}") 
-						deployProject(props,"${params.MODULE}","AGW","${params.BUILD_VERSION}") 
-
-					}
-			    }
-
-			}	
-		}
-
-	}
+    }
 
 }
 
-
-def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild, enableAgwBuild) {
+}
+def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild, enableMwsBuild, enableUmBuild, enableAgwBuild, targetPackages) {
+    if(props['dir.asset.root']!=null && !props['dir.asset.root'].isEmpty()) {
+        assetsDir = dirWorkspace + "/source/" + props['dir.asset.root']
+    } else {
+        assetsDir = dirWorkspace + "/source"
+    }
     
     dirSagInstall=props['dir.install.build']
     dirAssetIS=props['dir.asset.is']
@@ -212,231 +250,185 @@ def buildAsRepo(props, dirWorkspace, buildVersion, enableIsBuild, enableBpmBuild
     sourceUrlAGW=props['source.url.agw']
     sourceUserAGW=props['source.user.agw']
     sourcePwdAGW=props['source.pwd.agw']
-    sourceAssetFileAGW="${dirWorkspace}/source/${dirAssetAGW}/"+props['source.assets.file.agw']
+    sourceAssetFileAGW="${assetsDir}/${dirAssetAGW}/"+props['source.assets.file.agw']
 
-	sh "rm -rf ${dirWorkspace}/builds/*"
-	
-	sh "${dirSagInstall}/common/AssetBuildEnvironment/bin/build.sh\
-         -Dsag.install.dir=${dirSagInstall}\
-         -Dbuild.source.dir=${dirWorkspace}/source/$dirAssetIS\\;${dirWorkspace}/source/$dirAssetBPM\\;${dirWorkspace}/source/$dirAssetMWS\\;${dirWorkspace}/source/$dirAssetUM\
-         -Dbuild.output.dir=${dirWorkspace}/builds\
-         -Dbuild.version=${buildVersion}\
-         -Dbuild.archive.dir=${dirWorkspace}/archive\
-         -Dbuild.log.fileName=${dirWorkspace}/logs/log_" + "${buildVersion}" + ".txt\
-         -Denable.build.IS=${enableIsBuild}\
-         -Denable.build.BPM=${enableBpmBuild}\
-         -Denable.build.MWS=${enableMwsBuild}\
-         -Denable.build.UniversalMessaging=${enableUmBuild}\
-		 -Denable.build.APIGateway=$enableAgwBuild\
-		 -Dapigateway.is.url=$sourceUrlAGW\
-		 -Dapigateway.is.username=$sourceUserAGW\
-		 -Dapigateway.is.password=$sourcePwdAGW\
-		 -Dapigateway.assets.file=$sourceAssetFileAGW\
-		 -Dapigateway.useLocalRepo=false\
-         -Denable.archive=true"
+    abeISSourceArray = []
+    for(p in targetPackages) {
+        abeISSourceArray.add(assetsDir + "/" + dirAssetIS + "/" + p)
+    }
+    abeISSources = abeISSourceArray.join(";")
+
+    sh "rm -rf ${dirWorkspace}/builds/*"
+    
+    sh "${dirSagInstall}/common/AssetBuildEnvironment/bin/build.sh\
+        -Dsag.install.dir=${dirSagInstall}\
+        -Dbuild.source.dir=${assetsDir}/$dirAssetBPM\\;${assetsDir}/$dirAssetMWS\\;${assetsDir}/$dirAssetUM\
+        -Dbuild.source.project.dir=${abeISSources} \
+        -Dis.acdl.config.dir=${assetsDir}/${dirAssetIS}/config \
+        -Dbuild.output.dir=${dirWorkspace}/builds\
+        -Dbuild.version=${buildVersion}\
+        -Dbuild.archive.dir=${dirWorkspace}/archive\
+        -Dbuild.log.fileName=${dirWorkspace}/logs/log_" + "${buildVersion}" + ".txt\
+        -Denable.build.IS=${enableIsBuild}\
+        -Denable.build.BPM=${enableBpmBuild}\
+        -Denable.build.MWS=${enableMwsBuild}\
+        -Denable.build.UniversalMessaging=${enableUmBuild}\
+        -Denable.build.APIGateway=$enableAgwBuild\
+        -Dapigateway.is.url=$sourceUrlAGW\
+        -Dapigateway.is.username=$sourceUserAGW\
+        -Dapigateway.is.password=$sourcePwdAGW\
+        -Dapigateway.assets.file=$sourceAssetFileAGW\
+        -Dapigateway.useLocalRepo=false\
+        -Denable.archive=true"
 }
 
 def createProject(props, dirWorkspace, dirUtils, module, assetPrefix, type, buildVersion) {
+
+    if(!(type in ["IS","BPM","MWS","UM","AGW"])) {
+        error("Unsupported project type: ${type}")
+    }
 
     dirSagInstall=props['dir.install.build']
     dirTemplates="${workspace}/${dirUtils}/templates"
     dirAssetVs="${dirWorkspace}/source/"+props['dir.asset.vs']
 
-	deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
-	deployerHost=props['deployer.host']	
-	deployerPort=props['deployer.port']
-	deployerUser=props['deployer.user']
-	deployerPwd=props['deployer.pwd']
+    deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
+    deployerHost=props['deployer.host'] 
+    deployerPort=props['deployer.port']
+    deployerUser=props['deployer.user']
+    deployerPwd=props['deployer.pwd']
 
-	projectName = "${module}_${type}_${buildVersion}"	
-	repositoryAlias="${module}_Repo"
-	repositoryPath="${dirWorkspace}/builds"
-	automatorFile = "${dirWorkspace}/${module}_Automator${type}_${buildVersion}.xml"
-	    
-	switch("${type}") {
-		case "IS":
-				xmlTemplate="${dirTemplates}/"+props['template.base.is']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.is']
-				targetAlias=props['target.alias.is']
-				targetHost=props['target.host.is']
-				targetPort=props['target.port.is']
-				targetUser=props['target.user.is']
-				targetPwd=props['target.pwd.is']
-				targetVersion=props['target.version.is']							
-				targetSsl=props['target.ssl.is']							
-				depSetName=props['dep.set.is']
-				depMapName=props['dep.map.is']
-				depCanName=props['dep.can.is']
-				varsubFile=props['dep.vs.is']
-			break
-		case "BPM":
-				xmlTemplate="${dirTemplates}/"+props['template.base.bpm']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.bpm']
-				targetAlias=props['target.alias.bpm']
-				targetHost=props['target.host.bpm']
-				targetPort=props['target.port.bpm']
-				targetUser=props['target.user.bpm']
-				targetPwd=props['target.pwd.bpm']
-				targetVersion=props['target.version.bpm']							
-				targetSsl=props['target.ssl.bpm']							
-				depSetName=props['dep.set.bpm']
-				depMapName=props['dep.map.bpm']
-				depCanName=props['dep.can.bpm']
-				varsubFile=props['dep.vs.bpm']
-			break	    	
-		case "MWS":
-				xmlTemplate="${dirTemplates}/"+props['template.base.mws']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.mws']
-				targetAlias=props['target.alias.mws']
-				targetHost=props['target.host.mws']
-				targetPort=props['target.port.mws']
-				targetUser=props['target.user.mws']
-				targetPwd=props['target.pwd.mws']
-				targetVersion=props['target.version.mws']							
-				targetSsl=props['target.ssl.mws']							
-				depSetName=props['dep.set.mws']
-				depMapName=props['dep.map.mws']
-				depCanName=props['dep.can.mws']
-				varsubFile=props['dep.vs.mws']
-			break 
-		case "UM":
-				xmlTemplate="${dirTemplates}/"+props['template.base.um']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.um']
-				targetAlias=props['target.alias.um']
-				targetHost=props['target.host.um']
-				targetPort=props['target.port.um']
-				targetUser=props['target.user.um']
-				targetPwd=props['target.pwd.um']
-				targetVersion=props['target.version.um']							
-				targetSsl=props['target.ssl.um']							
-				depSetName=props['dep.set.um']
-				depMapName=props['dep.map.um']
-				depCanName=props['dep.can.um']
-				varsubFile=props['dep.vs.um']
-			break
-		case "AGW":
-				xmlTemplate="${dirTemplates}/"+props['template.base.agw']
-				xsltTemplate="${dirTemplates}/"+props['templete.xslt.agw']
-				targetAlias=props['target.alias.agw']
-				targetHost=props['target.host.agw']
-				targetPort=props['target.port.agw']
-				targetUser=props['target.user.agw']
-				targetPwd=props['target.pwd.agw']
-				targetVersion=props['target.version.agw']							
-				targetSsl=props['target.ssl.agw']							
-				depSetName=props['dep.set.agw']
-				depMapName=props['dep.map.agw']
-				depCanName=props['dep.can.agw']
-				varsubFile=props['dep.vs.agw']
+    projectName = "${module}_${type}_${buildVersion}"   
+    repositoryAlias="${module}_Repo"
+    repositoryPath="${dirWorkspace}/builds"
+    automatorFile = "${dirWorkspace}/${module}_Automator${type}_${buildVersion}.xml"
 
-			break
-		default:
-			error("Unsupported project type : ${type}")    
-			break
-	}
-	    //For wM9.x versions ant is located in ${dirSagInstall}/common/AssetBuildEnvironment/ant/bin/ant
-	    //For wM10.x versions ant is located in ${dirSagInstall}/common/lib/ant/bin/ant
-	    
-		sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml createRepositoryProject \
+    ltype=type.toLowerCase()
+    xmlTemplate="${dirTemplates}/"+props['template.base.' + ltype]
+    depSetName=props['dep.set.' + ltype]
+    depMapName=props['dep.map.' + ltype]
+    depCanName=props['dep.can.' + ltype]
+    varsubFile=props['dep.vs.' + ltype]
+    clustered = props['cluster.alias.' + ltype]
+
+    deployerParameters = []
+    importVsParameters = []
+    if(!(clustered==null || clustered.isEmpty())) {
+        if(!(type in ["IS","BPM"])) {
+            error("Project type ${type} does not support clustered deployments.")
+        }
+        buildTarget = "createRepositoryProjectForCluster"
+        importVsTarget = "importVarSubsForCluster"
+        xsltTemplate="${dirTemplates}/AutomatorRepository${type}Cluster.xslt"
+        clusterMembers = props['cluster.members.' + ltype].split(',')
+        deployerParameters.add("-Dtarget.clusterGroupAlias=${clustered}")
+        i = 0
+        for(member in clusterMembers) {
+            importVsParameters.add("-Dtarget.alias${i}="   + props['target.alias.' + member])
+            deployerParameters.add("-Dtarget.alias${i}="   + props['target.alias.' + member])
+            deployerParameters.add("-Dtarget.host${i}="    + props['target.host.' + member])
+            deployerParameters.add("-Dtarget.port${i}="    + props['target.port.' + member])
+            deployerParameters.add("-Dtarget.user${i}="    + props['target.user.' + member])
+            deployerParameters.add("-Dtarget.pwd${i}="     + props['target.pwd.' + member])
+            deployerParameters.add("-Dtarget.version${i}=" + props['target.version.' + member])
+            deployerParameters.add("-Dtarget.ssl${i}="     + props['target.ssl.' + member])
+            i++
+        }
+    } else {
+        buildTarget = "createRepositoryProject"
+        importVsTarget = "importVarSubs"
+        xsltTemplate="${dirTemplates}/AutomatorRepository${type}.xslt"
+        importVsParameters.add("-Dtarget.alias="   + props['target.alias.' + ltype])
+        deployerParameters.add("-Dtarget.alias="   + props['target.alias.' + ltype])
+        deployerParameters.add("-Dtarget.host="    + props['target.host.' + ltype])
+        deployerParameters.add("-Dtarget.port="    + props['target.port.' + ltype])
+        deployerParameters.add("-Dtarget.user="    + props['target.user.' + ltype])
+        deployerParameters.add("-Dtarget.pwd="     + props['target.pwd.' + ltype])
+        deployerParameters.add("-Dtarget.version=" + props['target.version.' + ltype])
+        deployerParameters.add("-Dtarget.ssl="     + props['target.ssl.' + ltype])
+    }
+
+        
+    //For wM9.x versions ant is located in ${dirSagInstall}/common/AssetBuildEnvironment/ant/bin/ant
+    //For wM10.x versions ant is located in ${dirSagInstall}/common/lib/ant/bin/ant
+        
+    sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml ${buildTarget} \
         -Dsag.install.dir=${dirSagInstall}\
-		-Dautomator.file=${automatorFile} \
-		-Dautomator.template=${xmlTemplate} \
-		-Dxslt.template=${xsltTemplate} \
-		-Ddeployer.home=${deployerHome} \
-		-Ddeployer.host=${deployerHost} \
-		-Ddeployer.port=${deployerPort} \
-		-Ddeployer.user=${deployerUser} \
-		-Ddeployer.pwd=${deployerPwd} \
-		-Drepository.alias=${repositoryAlias} \
-		-Drepository.path=${repositoryPath} \
-		-Dproj.name=${projectName}\
-		-Ddeployment.name=${depSetName} \
-		-Dmap.name=${depMapName} \
-		-Dcandidate.name=${depCanName} \
-		-Dtarget.alias=${targetAlias} \
-		-Dtarget.host=${targetHost} \
-		-Dtarget.port=${targetPort} \
-		-Dtarget.user=${targetUser} \
-		-Dtarget.pwd=${targetPwd} \
-		-Dtarget.version=${targetVersion} \
-		-Dtarget.ssl=${targetSsl} \
-		-Dcomposite.name=${assetPrefix} \
-		-Dbuild.version=${buildVersion}"
+        -Dautomator.file=${automatorFile} \
+        -Dautomator.template=${xmlTemplate} \
+        -Dxslt.template=${xsltTemplate} \
+        -Ddeployer.home=${deployerHome} \
+        -Ddeployer.host=${deployerHost} \
+        -Ddeployer.port=${deployerPort} \
+        -Ddeployer.user=${deployerUser} \
+        -Ddeployer.pwd=${deployerPwd} \
+        -Drepository.alias=${repositoryAlias} \
+        -Drepository.path=${repositoryPath} \
+        -Dproj.name=${projectName}\
+        -Ddeployment.name=${depSetName} \
+        -Dmap.name=${depMapName} \
+        -Dcandidate.name=${depCanName} \
+        -Dcomposite.name=${assetPrefix} \
+        -Dbuild.version=${buildVersion} \
+        ${deployerParameters}.join(' ')"
 
-		try {
-			sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml importVarSubs \
-				-Dsag.install.dir=${dirSagInstall} \
-				-Dvs.dir=${dirAssetVs} \
-				-Dvs.file=${varsubFile} \
-				-Ddeployer.home=${deployerHome} \
-				-Ddeployer.host=${deployerHost} \
-				-Ddeployer.port=${deployerPort} \
-				-Ddeployer.user=${deployerUser} \
-				-Ddeployer.pwd=${deployerPwd} \
-				-Drepository.alias=${repositoryAlias} \
-				-Dproj.name=${projectName}\
-				-Ddeployment.name=${depSetName} \
-				-Dmap.name=${depMapName} \
-				-Dproj.map=$depMapName \
-				-Dtarget.alias=${targetAlias}"
-		} catch (Exception e) {
-				echo "Error during varsub import. Check the corresponding varsub file or perform the operations manually"
-				currentBuild.currentResult = "UNSTABLE"
-		}	
+    try {
+        sh "${dirSagInstall}/common/lib/ant/bin/ant -file $dirTemplates/build-custom.xml ${importVsTarget} \
+            -Dsag.install.dir=${dirSagInstall} \
+            -Dvs.dir=${dirAssetVs} \
+            -Dvs.file=${varsubFile} \
+            -Ddeployer.home=${deployerHome} \
+            -Ddeployer.host=${deployerHost} \
+            -Ddeployer.port=${deployerPort} \
+            -Ddeployer.user=${deployerUser} \
+            -Ddeployer.pwd=${deployerPwd} \
+            -Drepository.alias=${repositoryAlias} \
+            -Dproj.name=${projectName}\
+            -Ddeployment.name=${depSetName} \
+            -Dmap.name=${depMapName} \
+            -Dproj.map=$depMapName \
+            ${importVsParameters}.join(' ')"
+    } catch (Exception e) {
+        echo "Error during varsub import. Check the corresponding varsub file or perform the operations manually"
+        currentBuild.currentResult = "UNSTABLE"
+    }   
 
 }
 
-
 def deployProject(props, module, type, buildVersion) {
+    if(!(type in ["IS","BPM","MWS","UM","AGW"])) {
+        error("Unsupported project type: ${type}")
+    }
 
-	projectName = "${module}_${type}_${buildVersion}"
-	deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
-	deployerHost=props['deployer.host']	
-	deployerPort=props['deployer.port']
-	deployerUser=props['deployer.user']
-	deployerPwd=props['deployer.pwd']
+    projectName = "${module}_${type}_${buildVersion}"
+    deployerHome=props['dir.install.build']+"/"+props['dir.install.deployer']
+    deployerHost=props['deployer.host'] 
+    deployerPort=props['deployer.port']
+    deployerUser=props['deployer.user']
+    deployerPwd=props['deployer.pwd']
+    ltype = type.toLowerCase()
+    depCanName=props['dep.can.' + ltype]
 
-	switch("${type}") {
-		case "IS":			
-				depCanName=props['dep.can.is']
-			break
-		case "BPM":
-				depCanName=props['dep.can.bpm']		
-			break	    	
-		case "MWS":
-				depCanName=props['dep.can.mws']		
-			break 
-		case "UM":
-				depCanName=props['dep.can.um']		
-			break
-		case "AGW":
-				depCanName=props['dep.can.agw']		
-			break
-		default:
-			error("Unsupported project type : ${type}")    
-			break
-	}
-
-	sh "${deployerHome}/bin/Deployer.sh --checkpoint -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
-	sh "${deployerHome}/bin/Deployer.sh --deploy -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
-	
+    sh "${deployerHome}/bin/Deployer.sh --checkpoint -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
+    sh "${deployerHome}/bin/Deployer.sh --deploy -project ${projectName} -dc ${depCanName} -host ${deployerHost} -port ${deployerPort} -user ${deployerUser} -pwd ${deployerPwd}"
+    
 }
 
 def uploadArchive(props,dirWorkspace,buildVersion) {
-    	
-	repoArtifactCredential = props['repo.artifact.credential']
-	repoArtifactUrl = props['repo.artifact.url']
-	repoArtifactPath = props['repo.artifact.path.abe']
+        
+    repoArtifactCredential = props['repo.artifact.credential']
+    repoArtifactUrl = props['repo.artifact.url']
+    repoArtifactPath = props['repo.artifact.path.abe']
 
 
-	dir("${dirWorkspace}/builds") {
-		sh "zip -r ${buildVersion}.zip ."
-		withCredentials([usernamePassword(credentialsId: "${repoArtifactCredential}", usernameVariable: "artifactUser", passwordVariable: "artifactPwd")]) {
-			sh "curl -v -u ${artifactUser}:${artifactPwd} --upload-file ${buildVersion}.zip ${repoArtifactUrl}/${repoArtifactPath}/${buildVersion}.zip"
-		}
-		sh "rm -rf ${buildVersion}.zip"
+    dir("${dirWorkspace}/builds") {
+        sh "zip -r ${buildVersion}.zip ."
+        withCredentials([usernamePassword(credentialsId: "${repoArtifactCredential}", usernameVariable: "artifactUser", passwordVariable: "artifactPwd")]) {
+            sh "curl -v -u ${artifactUser}:${artifactPwd} --upload-file ${buildVersion}.zip ${repoArtifactUrl}/${repoArtifactPath}/${buildVersion}.zip"
+        }
+        sh "rm -rf ${buildVersion}.zip"
 
-	}       
+    }       
 }
 
-
+// vim: ts=4 sw=4 expandtab:
